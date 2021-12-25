@@ -55,6 +55,8 @@
     <Compile Include="ExcelFunctions.cs" />
     <Compile Include="ExcelObject.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RtdClock.cs" />
+    <Compile Include="RtdClockServer.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="ExcelDnaDemo-AddIn.dna" />

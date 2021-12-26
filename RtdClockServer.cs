@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using ExcelDna.Integration.Rtd;
+using System.Timers;
+using Newtonsoft.Json;
 
 namespace ExcelDnaDemo
 {
@@ -14,12 +18,26 @@ namespace ExcelDnaDemo
 
         // Using a System.Threading.Time which invokes the callback on a ThreadPool thread 
         // (normally that would be dangeours for an RTD server, but ExcelRtdServer is thrad-safe)
-        Timer _timer;
+        System.Timers.Timer _timer;
         List<Topic> _topics;
+        private const int Throttle = 1000;  // 1sec polling max
+
+        private void SetTimer(int rate)
+        {
+            rate = Math.Max(Throttle, rate);     //throttling rate refresh
+            if(_timer != null)
+                _timer.Dispose();
+
+            _timer = new System.Timers.Timer(rate)
+            {
+                AutoReset = true
+            };
+            _timer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
+            _timer.Start();
+        }
 
         protected override bool ServerStart()
         {
-            _timer = new Timer(timer_tick, null, 0, 1000);
             _topics = new List<Topic>();
             return true;
         }
@@ -31,8 +49,11 @@ namespace ExcelDnaDemo
 
         protected override object ConnectData(Topic topic, IList<string> topicInfo, ref bool newValues)
         {
+            int.TryParse(topicInfo[0], out int rate);
+            SetTimer(rate);
+
             _topics.Add(topic);
-            return DateTime.Now.ToString("HH:mm:ss") + " (ConnectData)";
+            return "(ConnectData)";
         }
 
         protected override void DisconnectData(Topic topic)
@@ -40,11 +61,24 @@ namespace ExcelDnaDemo
             _topics.Remove(topic);
         }
 
-        void timer_tick(object _unused_state_)
+
+        private async void OnTimedEvent(Object source, ElapsedEventArgs e)
         {
-            string now = DateTime.Now.ToString("HH:mm:ss");
+            var now = await GetNow();
             foreach (var topic in _topics)
-                topic.UpdateValue(now);
+                topic.UpdateValue(now.ToString("o"));
         }
+
+        private async Task<DateTime> GetNow()
+        { 
+            using (var client = new HttpClient())
+            {
+                var task = await client.GetAsync("http://worldtimeapi.org/api/timezone/Europe/Paris");
+                var json = await task.Content.ReadAsStringAsync();
+                var clock = JsonConvert.DeserializeObject<ClockResult>(json);
+                return clock.datetime;
+            }
+        }
+         
     }
 }
